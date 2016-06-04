@@ -1,0 +1,8 @@
+{
+  "name": "FrameGenerator",
+  "version": "0.0.1",
+  "description": "Transform Binary Readable Stream to Object Stream through Generator",
+  "main": "FrameGenerator.js",
+  "author": "yanagieiichi@web-tinker.com",
+  "license": "MIT"
+}
