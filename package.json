@@ -4,5 +4,8 @@
   "description": "Transform Binary Stream to Object Stream through Generator",
   "main": "FrameGenerator.js",
   "author": "yanagieiichi@web-tinker.com",
-  "license": "MIT"
+  "license": "MIT",
+  "scripts": {
+    "test": "./tests/test.sh"
+  }
 }
