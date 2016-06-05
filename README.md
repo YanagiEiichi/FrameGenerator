@@ -1,35 +1,23 @@
 ## FrameGenerator
 
-Transform Binary Readable Stream to Object Stream through Generator
+Transform Binary Stream to Object Stream through Generator
 
-#### Example
+It's suitable for parsing protocol from binary stream
+
+### Require
+
+node 6.0.0
+
+### Usage
 
 ```js
-// test.js
-
 const FrameGenerator = require('FrameGenerator');
 
-const Byte = {
-  length: 1,
-  read: (buffer, index) => buffer[index]
-};
-
-const gen = new FrameGenerator(function*() {
-  let result = [];
-  // Read until \n
-  while (true) {
-    let byte = yield Byte;
-    if (byte === 10) break;
-    result.push(byte);
-  }
-  return [ String.fromCharCode(...result) ];
+let fg = new FrameGenerator(function*() {
+  let buffer1 = yield length; // Read a known length
+  let buffer2 = yield terminator; // Read until terminator string
+  return { buffer1, buffer2 }; // Return and write to outputStream
 });
 
-process.stdin.pipe(gen).on('data', data => {
-  console.log(data);
-});
-```
-
-```sh
-ping 127.0.0.1 | node test.js
+inputStream.pipe(fg).pipe(outputStream)
 ```
