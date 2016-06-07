@@ -3,71 +3,90 @@ const { Transform } = require('stream');
 class FrameGenerator extends Transform {
   constructor(generator) {
     super({ readableObjectMode : true });
-    this.generator = generator;
     this.position = 0;
     this.buffer = new Buffer(0);
-    this.generate();
+    this.stack = [];
+    this.begin(generator);
   }
-  // Begin to generate a frame throgh the Generator Function
-  generate() {
-    this.iterator = this.generator();
-    this.step = this.resolver();
+  // Begin to generate frames with a generator
+  begin(generator, callback = result => this.push(result)) {
+    this.stack.push(this.atomGenerator(generator, callback));
   }
-  // resolve the "yield" result and begin to next phase
-  phase(data) {
-    this.step = this.resolver(data);
-    this.step.next();
+  // Forward to next yield
+  forward() {
+    return this.stack[this.stack.length - 1].next();
   }
-  // Fulfill the frame data and begin to next
-  fulfill(frame) {
-    this.push(frame);
-    this.generate();
-    this.step.next();
-  }
-  // Waiting for input stream and try to resolve frame data
-  *resolver(args) {
-    let { done, value } = this.iterator.next(args);
-    // Output the frame result in stream and begin to generate next frame, if Generator Function returned
-    if (done) return this.fulfill(value);
-    // Otherwise
-    if (typeof value === 'string') value = { terminator: value };
-    if (typeof value === 'number') value = { length: value };
-    // Usage 1: Read until terminator string
-    if ('terminator' in value) {
-      let terminator = new Buffer(value.terminator);
-      let lastIndex = 0;
-      let result = [];
-      while (true) {
-        while (this.buffer.length <= this.position) yield this.next();
-        let byte = this.buffer[this.position++];
-        result.push(byte);
-        if (byte === terminator[lastIndex]) {
-          if (lastIndex + 1 >= terminator.length) {
-            this.phase(new Buffer(result));
-            break;
-          } else {
-            lastIndex++;
+  // Atom data generator
+  *atomGenerator(what, callback) {
+    let generator, iterator;
+    if (typeof what === 'function') {
+      generator = what;
+      iterator = generator();
+    } else {
+      iterator = what;
+    }
+    let result;
+    // Generate all required atom to create a frame
+    while (true) {
+      let { done, value } = iterator.next(result);
+      // A frame created, so break the "while" loop
+      if (done) {
+        result = value;
+        break;
+      }
+      // Check required atom type and generate it
+      switch (typeof value) {
+        // Usage 1: Read until terminator string
+        case 'string': {
+          let terminator = new Buffer(value);
+          let lastIndex = 0;
+          let receiver = [];
+          while (true) {
+            while (this.buffer.length <= this.position) yield this.next();
+            let byte = this.buffer[this.position++];
+            receiver.push(byte);
+            if (byte === terminator[lastIndex]) {
+              if (lastIndex + 1 >= terminator.length) {
+                result = new Buffer(receiver);
+                break;
+              } else {
+                lastIndex++;
+              }
+            } else {
+              lastIndex = 0;
+            }
           }
-        } else {
-          lastIndex = 0;
+          break;
         }
+        // Usage 2: Read a known length
+        case 'number': {
+          while (this.buffer.length - this.position < value) yield this.next();
+          result = this.buffer.slice(this.position, this.position + value);
+          this.position += value;
+          break;
+        }
+        // Usage 3: Read with sub-frame-generator
+        case 'object': {
+          if (typeof value.next === 'function') {
+            let directly = true;
+            this.begin(value, subFrame => {
+              result = subFrame;
+              if (!directly) this.forward();
+            });
+            directly = this.forward().done;
+            if (!directly) yield void 0;
+          }
+          break;
+        }
+        default:
+          throw new Error(`FrameGenerator: Unknown yield format "${typeof value}"`);
       }
     }
-    // Usage 2: Read a known length
-    else if ('length' in value) {
-      while (this.buffer.length - this.position < value.length) yield this.next();
-      let result;
-      if (typeof value.read === 'function') {
-        result = value.read(this.buffer, this.position);
-      } else {
-        result = this.buffer.slice(this.position, this.position + value.length);
-      }
-      this.position += value.length;
-      this.phase(result);
-    }
-    // Otherwise: Throw an error
-    else {
-      throw new Error('FrameGenerator: Unknown yield format');
+    this.stack.pop();
+    callback(result);
+    if (generator) {
+      this.begin(generator);
+      this.forward();
     }
   }
   // Stream input event, resume the "resolver"
@@ -75,7 +94,7 @@ class FrameGenerator extends Transform {
     this.buffer = Buffer.concat([ this.buffer.slice(this.position), buffer ]);
     this.position = 0;
     this.next = next;
-    this.step.next();
+    this.forward();
   }
 }
 

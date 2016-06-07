@@ -1,8 +1,16 @@
 const FrameGenerator = require('../FrameGenerator');
 const { Readable } = require('stream');
 
+const sub = function*(length) {
+  if (length) {
+    return Buffer.concat([ yield 1, yield sub(length - 1) ]);
+  } else {
+    return new Buffer(0);
+  }
+};
+
 let fg = new FrameGenerator(function*() {
-  return (Buffer.concat([ yield 1, yield 2, yield 1 ])).readUInt32BE(0);
+  return (yield sub(4)).readInt32BE(0);
 });
 
 class InputStream extends Readable {
