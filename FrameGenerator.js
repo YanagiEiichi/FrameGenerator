@@ -84,17 +84,22 @@ class FrameGenerator extends Transform {
     }
     this.stack.pop();
     callback(result);
-    if (generator) {
-      this.begin(generator);
-      this.forward();
-    }
+    return generator;
   }
   // Stream input event, resume the "resolver"
   _write(buffer, enc, next) {
     this.buffer = Buffer.concat([ this.buffer.slice(this.position), buffer ]);
     this.position = 0;
     this.next = next;
-    this.forward();
+    while (true) {
+      let result = this.forward();
+      let { done, value } = result;
+      if (done && value) {
+        this.begin(value);
+      } else {
+        break;
+      }
+    }
   }
 }
 
