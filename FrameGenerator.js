@@ -1,5 +1,22 @@
 const { Transform } = require('stream');
 
+const matchString = function*(what) {
+  let terminator = new Buffer(what);
+  let index = 0;
+  while (true) {
+    let byte = yield index;
+    if (byte === terminator[index]) {
+      if (index + 1 >= terminator.length) {
+        return terminator;
+      } else {
+        index++;
+      }
+    } else {
+      index = 0;
+    }
+  }
+}
+
 class FrameGenerator extends Transform {
   constructor(generator) {
     super({ readableObjectMode : true });
@@ -38,23 +55,14 @@ class FrameGenerator extends Transform {
       switch (typeof value) {
         // Usage 1: Read until terminator string
         case 'string': {
-          let terminator = new Buffer(value);
-          let lastIndex = 0;
+          let terminator = matchString(value);
           let receiver = [];
-          while (true) {
+          result = void 0;
+          while (!result) {
             while (this.buffer.length <= this.position) yield this.next();
             let byte = this.buffer[this.position++];
             receiver.push(byte);
-            if (byte === terminator[lastIndex]) {
-              if (lastIndex + 1 >= terminator.length) {
-                result = new Buffer(receiver);
-                break;
-              } else {
-                lastIndex++;
-              }
-            } else {
-              lastIndex = 0;
-            }
+            if (terminator.next(byte).done) result = Buffer(receiver);
           }
           break;
         }
@@ -80,32 +88,19 @@ class FrameGenerator extends Transform {
             }
             // Usage 4: Read until any specified string
             case value instanceof Array: {
-              let { length } = value;
-              let terminators = value.map(string => new Buffer(string));
-              let lastIndexes = new Uint16Array(length);
+              let terminators = value.map(string => matchString(string));
               let receiver = [];
               result = void 0;
-              while (true) {
+              while (!result) {
                 while (this.buffer.length <= this.position) yield this.next();
                 let byte = this.buffer[this.position++];
                 receiver.push(byte);
-                for (let i = 0; i < length; i++) {
-                  if (byte === terminators[i][lastIndexes[i]]) {
-                    let patternLength = terminators[i].length;
-                    if (lastIndexes[i] + 1 >= patternLength) {
-                      result = [
-                        new Buffer(receiver.slice(0, -patternLength)),
-                        new Buffer(receiver.slice(-patternLength))
-                      ]
-                      break;
-                    } else {
-                      lastIndexes[i]++;
-                    }
-                  } else {
-                    lastIndexes[i] = 0;
-                  }
+                for (let terminator of terminators) {
+                  let { done, value } = terminator.next(byte);
+                  if (!done) continue;
+                  result = [ new Buffer(receiver.slice(0, -value.length)), new Buffer(receiver.slice(-value.length)) ];
+                  break;
                 }
-                if (result) break;
               }
               break;
             }
