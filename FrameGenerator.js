@@ -65,16 +65,50 @@ class FrameGenerator extends Transform {
           this.position += value;
           break;
         }
-        // Usage 3: Read with sub-frame-generator
         case 'object': {
-          if (typeof value.next === 'function') {
-            let directly = true;
-            this.begin(value, subFrame => {
-              result = subFrame;
-              if (!directly) this.forward();
-            });
-            directly = this.forward().done;
-            if (!directly) yield void 0;
+          switch (true) {
+            // Usage 3: Read with sub-frame-generator
+            case typeof value.next === 'function': {
+              let directly = true;
+              this.begin(value, subFrame => {
+                result = subFrame;
+                if (!directly) this.forward();
+              });
+              directly = this.forward().done;
+              if (!directly) yield void 0;
+              break;
+            }
+            // Usage 4: Read until any specified string
+            case value instanceof Array: {
+              let { length } = value;
+              let terminators = value.map(string => new Buffer(string));
+              let lastIndexes = new Uint16Array(length);
+              let receiver = [];
+              result = void 0;
+              while (true) {
+                while (this.buffer.length <= this.position) yield this.next();
+                let byte = this.buffer[this.position++];
+                receiver.push(byte);
+                for (let i = 0; i < length; i++) {
+                  if (byte === terminators[i][lastIndexes[i]]) {
+                    let patternLength = terminators[i].length;
+                    if (lastIndexes[i] + 1 >= patternLength) {
+                      result = [
+                        new Buffer(receiver.slice(0, -patternLength)),
+                        new Buffer(receiver.slice(-patternLength))
+                      ]
+                      break;
+                    } else {
+                      lastIndexes[i]++;
+                    }
+                  } else {
+                    lastIndexes[i] = 0;
+                  }
+                }
+                if (result) break;
+              }
+              break;
+            }
           }
           break;
         }
@@ -92,8 +126,7 @@ class FrameGenerator extends Transform {
     this.position = 0;
     this.next = next;
     while (true) {
-      let result = this.forward();
-      let { done, value } = result;
+      let { done, value } = this.forward();
       if (done && value) {
         this.begin(value);
       } else {
