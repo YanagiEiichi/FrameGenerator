@@ -23,6 +23,7 @@ class FrameGenerator extends Transform {
     this.position = 0;
     this.buffer = new Buffer(0);
     this.stack = [];
+    this.generator = generator;
     this.begin(generator);
   }
   // Begin to generate frames with a generator
@@ -121,8 +122,8 @@ class FrameGenerator extends Transform {
     this.position = 0;
     this.next = next;
     while (true) {
-      let { done, value } = this.forward();
-      if (done && value) {
+      let { done, value = this.generator } = this.forward();
+      if (done) {
         this.begin(value);
       } else {
         break;

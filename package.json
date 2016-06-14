@@ -1,6 +1,6 @@
 {
   "name": "FrameGenerator",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Transform Binary Stream to Object Stream through Generator",
   "main": "FrameGenerator.js",
   "author": "yanagieiichi@web-tinker.com",

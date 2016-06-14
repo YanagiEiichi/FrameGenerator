@@ -29,6 +29,7 @@ class InputStream extends Readable {
 }
 
 let answer = [ 66051, 67438087, 134810123, 202182159 ];
+let ok = false;
 
 let capacitance = [];
 new InputStream().pipe(fg)
@@ -39,5 +40,10 @@ new InputStream().pipe(fg)
 
   .on('end', () => {
     let result = capacitance.every((item, index) => answer[index] === item);
+    ok = true;
     process.exit(!result);
   });
+
+process.on('exit', () => {
+  if (!ok) process.exit(1);
+});
