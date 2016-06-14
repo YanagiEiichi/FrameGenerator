@@ -60,7 +60,7 @@ class FrameGenerator extends Transform {
           let receiver = [];
           result = void 0;
           while (!result) {
-            while (this.buffer.length <= this.position) yield this.next();
+            while (this.buffer.length <= this.position) yield 'next';
             let byte = this.buffer[this.position++];
             receiver.push(byte);
             if (terminator.next(byte).done) result = Buffer(receiver);
@@ -69,7 +69,7 @@ class FrameGenerator extends Transform {
         }
         // Usage 2: Read a known length
         case 'number': {
-          while (this.buffer.length - this.position < value) yield this.next();
+          while (this.buffer.length - this.position < value) yield 'next';
           result = this.buffer.slice(this.position, this.position + value);
           this.position += value;
           break;
@@ -83,8 +83,9 @@ class FrameGenerator extends Transform {
                 result = subFrame;
                 if (!directly) this.forward();
               });
-              directly = this.forward().done;
-              if (!directly) yield void 0;
+              let it = this.forward();
+              directly = it.done;
+              if (!directly) yield it.value;
               break;
             }
             // Usage 4: Read until any specified string
@@ -93,7 +94,7 @@ class FrameGenerator extends Transform {
               let receiver = [];
               result = void 0;
               while (!result) {
-                while (this.buffer.length <= this.position) yield this.next();
+                while (this.buffer.length <= this.position) yield 'next';
                 let byte = this.buffer[this.position++];
                 receiver.push(byte);
                 for (let terminator of terminators) {
@@ -120,12 +121,13 @@ class FrameGenerator extends Transform {
   _write(buffer, enc, next) {
     this.buffer = Buffer.concat([ this.buffer.slice(this.position), buffer ]);
     this.position = 0;
-    this.next = next;
     while (true) {
-      let { done, value = this.generator } = this.forward();
+      let { done, value } = this.forward();
       if (done) {
-        this.begin(value);
+        if (!value && !this.stack.length) value = this.generator;
+        if (value) this.begin(value);
       } else {
+        if (value === 'next') next();
         break;
       }
     }
