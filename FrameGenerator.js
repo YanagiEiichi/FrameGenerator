@@ -34,6 +34,12 @@ class FrameGenerator extends Transform {
   forward() {
     return this.stack[this.stack.length - 1].next();
   }
+  readBytes(value) {
+    if (this.buffer.length - this.position < value) return void 0;
+    let result = this.buffer.slice(this.position, this.position + value);
+    this.position += value;
+    return result;
+  }
   // Atom data generator
   *atomGenerator(what, callback) {
     let generator, iterator;
@@ -69,9 +75,7 @@ class FrameGenerator extends Transform {
         }
         // Usage 2: Read a known length
         case 'number': {
-          while (this.buffer.length - this.position < value) yield 'next';
-          result = this.buffer.slice(this.position, this.position + value);
-          this.position += value;
+          while (!(result = this.readBytes(value))) yield 'next';
           break;
         }
         case 'object': {
