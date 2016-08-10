@@ -125,15 +125,20 @@ class FrameGenerator extends Transform {
   _write(buffer, enc, next) {
     this.buffer = Buffer.concat([ this.buffer.slice(this.position), buffer ]);
     this.position = 0;
-    while (true) {
-      let { done, value } = this.forward();
-      if (done) {
-        if (!value && !this.stack.length) value = this.generator;
-        if (value) this.begin(value);
-      } else {
-        if (value === 'next') next();
-        break;
+    try {
+      while (true) {
+        let { done, value } = this.forward();
+        if (done) {
+          if (!value && !this.stack.length) value = this.generator;
+          if (value) this.begin(value);
+        } else {
+          if (value === 'next') next();
+          break;
+        }
       }
+    } catch (error) {
+      this.emit('error', error);
+      this.push(null);
     }
   }
 }
