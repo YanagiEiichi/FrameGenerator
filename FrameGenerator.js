@@ -1,10 +1,9 @@
 const { Transform } = require('stream');
 
-const matchString = function*(what) {
+const matchString = what => {
   let terminator = new Buffer(what);
   let index = 0;
-  while (true) {
-    let byte = yield index;
+  return byte => {
     if (byte === terminator[index]) {
       if (index + 1 >= terminator.length) {
         return terminator;
@@ -14,7 +13,7 @@ const matchString = function*(what) {
     } else {
       index = 0;
     }
-  }
+  };
 }
 
 class FrameGenerator extends Transform {
@@ -62,14 +61,14 @@ class FrameGenerator extends Transform {
       switch (typeof value) {
         // Usage 1: Read until terminator string
         case 'string': {
-          let terminator = matchString(value);
+          let match = matchString(value);
           let receiver = [];
           result = void 0;
           while (!result) {
             while (this.buffer.length <= this.position) yield 'next';
             let byte = this.buffer[this.position++];
             receiver.push(byte);
-            if (terminator.next(byte).done) result = Buffer(receiver);
+            if (match(byte)) result = Buffer(receiver);
           }
           break;
         }
@@ -101,9 +100,9 @@ class FrameGenerator extends Transform {
                 while (this.buffer.length <= this.position) yield 'next';
                 let byte = this.buffer[this.position++];
                 receiver.push(byte);
-                for (let terminator of terminators) {
-                  let { done, value } = terminator.next(byte);
-                  if (!done) continue;
+                for (let match of terminators) {
+                  let value = match(byte);
+                  if (!value) continue;
                   result = [ new Buffer(receiver.slice(0, -value.length)), new Buffer(receiver.slice(-value.length)) ];
                   break;
                 }
